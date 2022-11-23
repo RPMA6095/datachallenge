@@ -10,7 +10,7 @@
 akaike <- inner_join(all_data, mun_entrenamiento, by = 
                        c("id_municipio" = "ID_MUNICIPIO",
                          "id_estado" = "ID_ESTADO")) %>%
-  dplyr::select(-c(1:3, 20, 26:34 ))
+  dplyr::select(-c(1:5,15,16,18,24:28,30,36:50))
 
 #Pasamos la variable GANADOR a clase factor para que la función "relevel" funcione
 

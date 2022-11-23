@@ -77,32 +77,31 @@ edupsb_IDH <- inner_join(edu_psb, IDH, by = c("ano", "id_municipio",
                                                "id_estado", "municipio",
                                               "cve_inegi"))
 
-#Creación de data frame con variables seleccionadas. Con este dataframe, "all_data",
+#Creación de data frame con variables seleccionadas. Con este dataframe, "all_data_akaike",
 #se va a correr el AKAIKE para conseguir las variables que realmente son las más
 #importantes. 
 
 all_data <- inner_join(edupsb_IDH, IDIM, 
-                       by = c("cve_inegi" = "Clave del Municipio")) %>%
-  dplyr::select(-c(1,2,15,16,18,24:28,36:41))
+                       by = c("cve_inegi" = "Clave del Municipio"))
+all_data_akaike <- dplyr::select(all_data,-c(1:5,15,16,18,24:28,36:41))
 
 #El akaike se realizó en el otro script, ahora se hace el
 #dataframe con las variables más importantes que arrojó el AKAIKE
 
-importantes_conClaves <- dplyr::select(all_data,-c(8,16,20,21,24,25)) 
+importantes_conClaves <- dplyr::select(all_data,-c(1, 10,15,16, 18,24:28
+                                                   ,30,31,34:41)) 
+
+#dataframe con municipio,id, número de votos y ganador
+importantes_conClaves_entrenamiento <- inner_join(importantes_conClaves, mun_entrenamiento,
+                                    by = c("id_municipio" = "ID_MUNICIPIO",
+                                           "id_estado" = "ID_ESTADO")) 
+
+#dataframe con municipio, id y ganador
+importantes_conClaves_ganador <- dplyr::select(importantes_conClaves_entrenamiento, -c(22:30))
 
 
-#se seleccionan las columnas con ID y GANADOR de los datos del profesor,
-#es decir, los de entrenamiento
-
-mun_entrenamiento <- dplyr::select(mun_entrenamiento, -c(2,4:11))
-
-#Se hace match de nuestros datos con los datos de entrenamiento y luego
-#se eliminan las columnas de id.
-
-entrenamiento <- inner_join(importantes_conClaves, mun_entrenamiento,
-                            by = c("id_estado" = "ID_ESTADO",
-                                   "id_municipio" = "ID_MUNICIPIO")) %>%
-  dplyr::select(-c(1,2,3))
+#Sólo se renombra la variable
+entrenamiento <- importantes_conClaves_ganador
 
 #Modelos de clasificación
 
@@ -127,29 +126,53 @@ metric <- "Accuracy"
 
 #Multinomial regression
 set.seed(6)
-fit.multinom <- train(GANADOR~., train_test, method="multinom", metric = metric, trControl = control)
+fit.QdaCov <- train(GANADOR~alumnos_total_primaria + docentes_total_primaria +
+                    escuelas_primaria + alumnos_total_bachillerato +
+                      docentes_total_bachillerato + escuelas_bachillerato +
+                      idh + tmi + talfa + ipca + isal + indice_de_rezago_social +
+                      + prestación_de_servicios_públicos +
+                      desarrollo_administrativo, 
+                    train_test, method="QdaCov", metric = metric, trControl = control)
 
 #Linear discriminant analysis
 set.seed(6)
-fit.lda <- train(GANADOR~.,  train_test, method="lda", metric=metric, trControl=control)
+fit.lda <- train(GANADOR~alumnos_total_primaria + docentes_total_primaria +
+                   escuelas_primaria + alumnos_total_bachillerato +
+                   docentes_total_bachillerato + escuelas_bachillerato +
+                   idh + tmi + talfa + ipca + isal + indice_de_rezago_social +
+                   + prestación_de_servicios_públicos +
+                   desarrollo_administrativo,  train_test, method="lda", metric=metric, trControl=control)
+#Rain Forest
+set.seed(6)
+fit.rf <- train(GANADOR~alumnos_total_primaria + docentes_total_primaria +
+                   escuelas_primaria + alumnos_total_bachillerato +
+                   docentes_total_bachillerato + escuelas_bachillerato +
+                   idh + tmi + talfa + ipca + isal + indice_de_rezago_social +
+                   + prestación_de_servicios_públicos +
+                   desarrollo_administrativo,  train_test, method="rf", metric=metric, trControl=control)
+
+
 
 # resumen de la precisión de los modelos 
-results <- resamples(list(multinom = fit.multinom, lda=fit.lda))
+results <- resamples(list(QdaCov = fit.QdaCov, lda=fit.lda, rf = fit.rf))
 summary(results)
 
 # comparar la precisión de los modelos
 dotplot(results)
 
-# resumen del mejor modelo: logistic regression
-print(fit.multinom)
+# resumen del mejor modelo: multinomial regression
+print(fit.QdaCov)
 
 #estimar la habilidad con el conjunto de datos de validación
 
-predictions <- predict(fit.multinom, validation)
+predictions <- predict(fit.QdaCov, validation)
 confusionMatrix(predictions, as.factor(validation$GANADOR))
 
 #Acá se compara e valor real com la predicción, pero no sale la id... estoy intentando eso
-actual_vs_predicted <- data.frame(actual= validation$GANADOR, predicted=predictions) 
+actual_vs_predicted <- data.frame(actual = validation, predicted=predictions) %>%
+  dplyr::select(c(1:4,22,23))
+
+
 View(actual_vs_predicted)
 
 
